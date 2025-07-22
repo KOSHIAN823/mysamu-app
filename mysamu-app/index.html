@@ -82,6 +82,8 @@
             min-height: 100vh;
             background-color: #f3f4f6;
             padding: 1rem;
+            max-width: 1200px;
+            margin: 0 auto;
         }
 
         .app-header {
@@ -149,8 +151,8 @@
             display: flex;
             flex-wrap: nowrap;
             overflow-x: scroll;
-            -ms-overflow-style: none; /* IE and Edge */
-            scrollbar-width: none; /* Firefox */
+            -ms-overflow-style: none;
+            scrollbar-width: none;
             width: 100%;
             padding: 0 2.5rem;
             scroll-behavior: smooth;
@@ -238,6 +240,7 @@
         }
         .form-input:focus, .form-select:focus, .form-textarea:focus {
             outline: none;
+            border-color: var(--focus-ring-color);
             box-shadow: 0 0 0 2px var(--focus-ring-color);
         }
         
@@ -256,19 +259,24 @@
             transition: all 0.3s;
             border: none;
             cursor: pointer;
+            font-size: 1rem;
+        }
+        .btn:disabled {
+            background-color: #9ca3af;
+            cursor: not-allowed;
         }
         .btn-primary {
             background-color: var(--primary-button-bg);
             color: var(--primary-button-text);
         }
-        .btn-primary:hover {
+        .btn-primary:hover:not(:disabled) {
             background-color: var(--primary-button-hover-bg);
         }
         .btn-secondary {
             background-color: var(--secondary-button-bg);
             color: var(--secondary-button-text);
         }
-        .btn-secondary:hover {
+        .btn-secondary:hover:not(:disabled) {
             background-color: var(--secondary-button-hover-bg);
         }
         
@@ -289,65 +297,38 @@
 
         /* Modal Styles */
         .modal-overlay {
-            position: fixed;
-            inset: 0;
-            background-color: rgba(0,0,0,0.7);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 50;
-            padding: 1rem;
+            position: fixed; inset: 0; background-color: rgba(0,0,0,0.7);
+            display: none; align-items: center; justify-content: center; z-index: 50; padding: 1rem;
         }
+        .modal-overlay.active { display: flex; }
         .modal-content {
-            background-color: white;
-            padding: 2rem;
-            border-radius: 1.5rem;
-            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);
-            max-width: 24rem; /* sm */
-            width: 100%;
-            text-align: center;
-            transform: scale(1);
-            transition: transform 0.3s ease-out;
+            background-color: white; padding: 2rem; border-radius: 1.5rem;
+            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); max-width: 24rem; width: 100%;
+            text-align: center; transform: scale(0.95); opacity: 0;
+            transition: all 0.3s ease-out;
         }
+        .modal-overlay.active .modal-content { transform: scale(1); opacity: 1; }
         .modal-message { font-size: 1.25rem; font-weight: 700; margin-bottom: 1.5rem; color: #1f2937; }
         .modal-button-container { display: flex; justify-content: center; gap: 1rem; }
-        .modal-button {
-            padding: 0.75rem 2rem;
-            border-radius: 9999px;
-            font-weight: 600;
-            transition: all 0.3s;
-            transform: scale(1);
-            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
-            border: none;
-            cursor: pointer;
-        }
-        .modal-button:hover { transform: scale(1.05); }
-        .modal-button-confirm { background-color: #b91c1c; color: white; }
-        .modal-button-confirm:hover { background-color: #991b1b; }
-        .modal-button-cancel { background-color: #6b7280; color: white; }
-        .modal-button-cancel:hover { background-color: #4b5563; }
-        .modal-button-close { background-color: #b91c1c; color: white; }
-        
+
         /* Message/Item Lists */
         .item-list-item {
-            padding: 1rem;
-            background-color: white;
-            border-radius: 0.5rem;
+            padding: 1rem; background-color: white; border-radius: 0.5rem;
             box-shadow: 0 1px 3px 0 rgba(0,0,0,0.1), 0 1px 2px 0 rgba(0,0,0,0.06);
-            cursor: pointer;
-            transition: background-color 0.2s;
+            cursor: pointer; transition: background-color 0.2s, transform 0.2s;
         }
-        .item-list-item:hover { background-color: #f9fafb; }
+        .item-list-item:hover { background-color: #f9fafb; transform: translateY(-2px); }
         
-        .flex-between { display: flex; justify-content: space-between; align-items: flex-start; }
+        .flex-between { display: flex; justify-content: space-between; align-items: center; }
         
         /* Hide views by default */
         .view { display: none; }
-        .view.active { display: block; }
+        .view.active { display: block; animation: fadeIn 0.5s; }
         
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
         /* Footer */
         .app-footer { text-align: center; color: #4b5563; margin-top: 3rem; font-size: 1rem; }
-
     </style>
 </head>
 <body class="theme-navyRedWhite">
@@ -366,24 +347,21 @@
         <nav class="nav-container">
             <button id="navScrollLeft" class="nav-scroll-arrow left" style="display: none;">&lt;</button>
             <div id="navScroller" class="nav-scroller">
-                <button id="tab-messages" class="nav-button inactive">連絡</button>
-                <button id="tab-calendar" class="nav-button inactive">カレンダー</button>
-                <button id="tab-rooms" class="nav-button inactive">練習部屋</button>
-                <button id="tab-rosters" class="nav-button active">隊列表</button>
-                <button id="tab-sponsorships" class="nav-button inactive">学生協賛</button>
-                <button id="tab-collection" class="nav-button inactive">集金</button>
+                <button data-tab="messages" class="nav-button inactive">連絡</button>
+                <button data-tab="calendar" class="nav-button inactive">カレンダー</button>
+                <button data-tab="rooms" class="nav-button inactive">練習部屋</button>
+                <button data-tab="rosters" class="nav-button active">隊列表</button>
+                <button data-tab="sponsorships" class="nav-button inactive">学生協賛</button>
+                <button data-tab="collection" class="nav-button inactive">集金</button>
             </div>
             <button id="navScrollRight" class="nav-scroll-arrow right" style="display: none;">&gt;</button>
         </nav>
 
         <main id="mainContent">
             <div id="view-loading" class="view active">
-                <p class="loading-text">読み込み中...</p>
+                <p class="loading-text">アプリを読み込んでいます...</p>
             </div>
-
-            <div id="view-auth" class="view">
-                </div>
-
+            <div id="view-auth" class="view"></div>
             <div id="view-messages" class="view content-card"></div>
             <div id="view-calendar" class="view content-card"></div>
             <div id="view-rooms" class="view content-card"></div>
@@ -397,34 +375,52 @@
         </footer>
     </div>
     
-    <div id="modalContainer"></div>
+    <div id="modalContainer" class="modal-overlay">
+        <div id="modalContent" class="modal-content"></div>
+    </div>
 
-    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore-compat.js"></script>
 
     <script type="module">
+        // Firebase v9+ (modular) SDK
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
+        import { getAuth, onAuthStateChanged, signInAnonymously } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
+        import { 
+            getFirestore, doc, onSnapshot, setDoc, getDoc, serverTimestamp, 
+            addDoc, collection, query, orderBy, deleteDoc, runTransaction, where, updateDoc
+        } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+        
         // --- CONFIGURATION ---
         const firebaseConfig = {
-            // ここにあなたのFirebaseプロジェクトの設定を貼り付けてください
-            apiKey: "AIzaSyDiRayvEJ27XHrhwgpl0Fl2HkInpkssaHA",
-            authDomain: "mysamu-app.firebaseapp.com",
-            projectId: "mysamu-app",
-            storageBucket: "mysamu-app.firebasestorage.app",
-            messagingSenderId: "577582013908",
-            appId: "1:577582013908:web:ff0ada048944d52131ca41",
-            measurementId: "G-QPKGG0FZC5"
+            /* ★★★ あなたのFirebase設定をここに貼り付け ★★★ */
+            apiKey: "AIza...",
+            authDomain: "your-project.firebaseapp.com",
+            projectId: "your-project",
+            storageBucket: "your-project.appspot.com",
+            messagingSenderId: "12345...",
+            appId: "1:12345...:web:abcdef..."
         };
-        const appId = 'default-app-id';
-        const initialAuthToken = ''; // Optional: __initial_auth_token
+        const appId = 'default-app-id'; // Or any identifier for your app instance
 
+        // --- FIREBASE INITIALIZATION ---
+        let app, auth, db;
+        try {
+            app = initializeApp(firebaseConfig);
+            auth = getAuth(app);
+            db = getFirestore(app);
+        } catch (e) {
+            console.error("Firebaseの初期化に失敗しました:", e);
+            const loadingView = document.getElementById('view-loading');
+            loadingView.innerHTML = `<p class="error-text">アプリの初期化に失敗しました。Firebaseの設定情報を確認してください。</p>`;
+        }
+        
         // --- STATE MANAGEMENT ---
-        let db, auth;
         let userId = null;
         let userProfile = null;
         let isAuthReady = false;
         let activeTab = 'rosters';
-        
+        let profileUnsubscribe = null; // To detach profile listener
+        let currentViewUnsubscribe = null; // To detach listeners of active view
+
         // --- DOM ELEMENT REFERENCES ---
         const mainContent = document.getElementById('mainContent');
         const views = {
@@ -437,102 +433,138 @@
             sponsorships: document.getElementById('view-sponsorships'),
             collection: document.getElementById('view-collection'),
         };
-        const tabs = {
-            messages: document.getElementById('tab-messages'),
-            calendar: document.getElementById('tab-calendar'),
-            rooms: document.getElementById('tab-rooms'),
-            rosters: document.getElementById('tab-rosters'),
-            sponsorships: document.getElementById('tab-sponsorships'),
-            collection: document.getElementById('tab-collection'),
-        }
+        const navButtons = document.querySelectorAll('.nav-button');
+        const modalContainer = document.getElementById('modalContainer');
+        const modalContent = document.getElementById('modalContent');
 
-        // --- UI RENDERING FUNCTIONS ---
-        
-        function updateUI() {
-            if (!isAuthReady) {
-                switchView('loading');
-                return;
-            }
-            if (!userProfile) {
-                switchView('auth');
-                renderAuthScreen();
-                return;
-            }
-            
-            // Switch to the active view and render its content
-            switchView(activeTab);
-            switch (activeTab) {
-                case 'messages':
-                    renderMessageBoard();
-                    break;
-                case 'calendar':
-                    // renderCalendar(); // Add function call
-                    break;
-                // Add other cases...
-                case 'rosters':
-                    // renderRosters(); // Add function call
-                    break;
-            }
-        }
+        // --- UI & VIEW MANAGEMENT ---
 
-        function switchView(viewName) {
+        /**
+         * Switches the visible view and updates tab styles.
+         * @param {string} viewName - The name of the view to switch to.
+         */
+        const switchView = (viewName) => {
+            if (currentViewUnsubscribe) {
+                currentViewUnsubscribe(); // Detach old listener
+                currentViewUnsubscribe = null;
+            }
+
+            activeTab = viewName;
             Object.values(views).forEach(view => view.classList.remove('active'));
             if (views[viewName]) {
                 views[viewName].classList.add('active');
             }
-            
-            Object.values(tabs).forEach(tab => tab.classList.replace('active', 'inactive'));
-            if (tabs[viewName]) {
-                tabs[viewName].classList.replace('inactive', 'active');
+
+            navButtons.forEach(button => {
+                if (button.dataset.tab === viewName) {
+                    button.classList.replace('inactive', 'active');
+                } else {
+                    button.classList.replace('active', 'inactive');
+                }
+            });
+
+            // Render the content for the new view
+            switch (viewName) {
+                case 'messages': renderMessageBoard(); break;
+                case 'calendar': renderCalendar(); break;
+                case 'rooms': renderPracticeRooms(); break;
+                case 'rosters': renderRosters(); break;
+                case 'sponsorships': renderSponsorships(); break;
+                case 'collection': renderCollection(); break;
             }
-        }
+        };
+
+        /**
+         * Main UI update function, called on auth state changes.
+         */
+        const updateUI = () => {
+            if (!isAuthReady) {
+                views.loading.classList.add('active');
+                views.auth.classList.remove('active');
+            } else if (!userProfile) {
+                renderAuthScreen();
+                views.loading.classList.remove('active');
+                views.auth.classList.add('active');
+            } else {
+                views.loading.classList.remove('active');
+                views.auth.classList.remove('active');
+                switchView(activeTab);
+            }
+        };
         
-        function renderAuthScreen() {
-             views.auth.innerHTML = `
+        // --- MODAL ---
+        const showModal = (htmlContent) => {
+            modalContent.innerHTML = htmlContent;
+            modalContainer.classList.add('active');
+        };
+        const hideModal = () => {
+            modalContainer.classList.remove('active');
+            modalContent.innerHTML = '';
+        };
+        modalContainer.addEventListener('click', (e) => {
+            if (e.target === modalContainer) hideModal();
+        });
+
+        // --- AUTHENTICATION ---
+        
+        onAuthStateChanged(auth, async (user) => {
+            if (profileUnsubscribe) profileUnsubscribe();
+
+            if (user) {
+                userId = user.uid;
+                const profileDocRef = doc(db, `artifacts/${appId}/users/${userId}/profile`, 'userProfile');
+                profileUnsubscribe = onSnapshot(profileDocRef, (profileSnap) => {
+                    userProfile = profileSnap.exists() ? { id: profileSnap.id, ...profileSnap.data() } : null;
+                    isAuthReady = true;
+                    updateUI();
+                }, (error) => {
+                    console.error("プロフィールリスナーエラー:", error);
+                    isAuthReady = true;
+                    updateUI();
+                });
+            } else {
+                userId = null;
+                userProfile = null;
+                isAuthReady = false; // Reset auth ready state
+                try {
+                    await signInAnonymously(auth);
+                } catch (error) {
+                    console.error("匿名サインイン失敗:", error);
+                    views.loading.innerHTML = `<p class="error-text">認証に失敗しました。ページを再読み込みしてください。</p>`;
+                }
+            }
+        });
+
+        const renderAuthScreen = () => {
+            views.auth.innerHTML = `
                 <div class="content-card" style="max-width: 28rem; margin: 3rem auto;">
                     <h2 class="content-title">プロフィール登録</h2>
                     <p style="text-align: center; color: #4b5563; margin-bottom: 1.5rem;">MYSAMUアプリをご利用いただくために、あなたの情報を登録してください。</p>
                     <div id="authError" class="error-text" style="padding: 0 0 1rem 0;"></div>
                     <div class="space-y-4">
-                        <div><label for="realName" class="form-label">本名:</label><input type="text" id="realName" class="form-input" /></div>
-                        <div><label for="yosana" class="form-label">よさな:</label><input type="text" id="yosana" class="form-input" /></div>
+                        <div><label for="realName" class="form-label">本名:</label><input type="text" id="realName" class="form-input" required /></div>
+                        <div><label for="yosana" class="form-label">よさな:</label><input type="text" id="yosana" class="form-input" required /></div>
                         <div>
                             <label for="grade" class="form-label">回生:</label>
                             <select id="grade" class="form-select">
                                 ${['1年生', '2年生', '3年生', '4年生', 'OB/OG'].map(opt => `<option value="${opt}">${opt}</option>`).join('')}
                             </select>
                         </div>
-                        <div><label for="dob" class="form-label">生年月日:</label><input type="date" id="dob" class="form-input" /></div>
-                        <div><label for="university" class="form-label">所属大学:</label><input type="text" id="university" class="form-input" /></div>
-                        <div><label for="faculty" class="form-label">学部:</label><input type="text" id="faculty" class="form-input" /></div>
+                        <div><label for="dob" class="form-label">生年月日:</label><input type="date" id="dob" class="form-input" required /></div>
+                        <div><label for="university" class="form-label">所属大学:</label><input type="text" id="university" class="form-input" required /></div>
+                        <div><label for="faculty" class="form-label">学部:</label><input type="text" id="faculty" class="form-input" required /></div>
                     </div>
                     <button id="registerProfileBtn" class="btn btn-primary" style="width: 100%; margin-top: 2rem;">プロフィールを登録</button>
                 </div>
             `;
-            
             document.getElementById('registerProfileBtn').addEventListener('click', handleRegisterProfile);
-        }
+        };
 
-        function renderMessageBoard() {
-            // This is a placeholder. A full implementation would involve listening to Firestore
-            // and dynamically generating the list, detail, and create views.
-            views.messages.innerHTML = `
-                <h2 class="content-title">連絡ボード</h2>
-                <p class="info-text">この機能は開発中です。</p>
-            `;
-        }
-
-        // ... Add more render functions for Calendar, Rooms, Rosters etc. following the pattern above
-
-        // --- EVENT HANDLERS & LOGIC ---
-
-        async function handleRegisterProfile() {
+        const handleRegisterProfile = async () => {
             const btn = document.getElementById('registerProfileBtn');
             const errorDiv = document.getElementById('authError');
             errorDiv.textContent = '';
-            btn.textContent = '登録中...';
-            btn.disabled = true;
-
+            
             const profileData = {
                 realName: document.getElementById('realName').value.trim(),
                 yosana: document.getElementById('yosana').value.trim(),
@@ -544,103 +576,234 @@
 
             if (Object.values(profileData).some(val => !val)) {
                 errorDiv.textContent = 'すべての項目を入力してください。';
-                btn.textContent = 'プロフィールを登録';
-                btn.disabled = false;
                 return;
             }
+            
+            btn.textContent = '登録中...';
+            btn.disabled = true;
 
             try {
-                const userProfileRef = db.doc(`artifacts/${appId}/users/${userId}/profile/userProfile`);
-                await userProfileRef.set({ ...profileData, registeredAt: firebase.firestore.FieldValue.serverTimestamp() });
-                // onSnapshot will automatically update the UI
+                const userProfileRef = doc(db, `artifacts/${appId}/users/${userId}/profile`, 'userProfile');
+                await setDoc(userProfileRef, { ...profileData, registeredAt: serverTimestamp() });
+                // onSnapshot will automatically update the UI and switch views.
             } catch (e) {
-                console.error("Error registering profile:", e);
+                console.error("プロフィール登録エラー:", e);
                 errorDiv.textContent = 'プロフィールの登録に失敗しました。';
                 btn.textContent = 'プロフィールを登録';
                 btn.disabled = false;
             }
-        }
-        
-        function handleTabClick(e) {
-            const newTab = e.target.id.split('-')[1];
-            if (newTab && activeTab !== newTab) {
-                activeTab = newTab;
-                updateUI();
-            }
-        }
-        
-        function handleThemeChange(e) {
-            document.body.className = `theme-${e.target.value}`;
+        };
+
+        // --- MESSAGE BOARD ---
+        const renderMessageBoard = () => {
+             views.messages.innerHTML = `<div id="messages-content"></div>`;
+             renderMessageListView();
         }
 
-        // --- FIREBASE INITIALIZATION & AUTH ---
+        const renderMessageListView = () => {
+            const container = document.getElementById('messages-content');
+            container.innerHTML = `
+                <div class="flex-between" style="margin-bottom: 1.5rem;">
+                    <h2 class="content-title" style="text-align: left; margin: 0;">連絡ボード</h2>
+                    <button id="newMessageBtn" class="btn btn-primary">新規作成</button>
+                </div>
+                <div id="messageList" class="space-y-4">
+                    <p class="loading-text">メッセージを読み込み中...</p>
+                </div>
+            `;
+            document.getElementById('newMessageBtn').addEventListener('click', renderCreateMessageForm);
+            
+            const messagesRef = collection(db, `artifacts/${appId}/public/data/messages`);
+            const q = query(messagesRef, orderBy('timestamp', 'desc'));
 
-        function initialize() {
-            try {
-                firebase.initializeApp(firebaseConfig);
-                auth = firebase.auth();
-                db = firebase.firestore();
+            currentViewUnsubscribe = onSnapshot(q, (snapshot) => {
+                const listEl = document.getElementById('messageList');
+                if (snapshot.empty) {
+                    listEl.innerHTML = `<p class="info-text">メッセージはまだありません。</p>`;
+                    return;
+                }
+                listEl.innerHTML = '';
+                snapshot.forEach(docSnap => {
+                    const msg = { id: docSnap.id, ...docSnap.data() };
+                    const item = document.createElement('div');
+                    item.className = 'item-list-item';
+                    item.innerHTML = `
+                        <div class="flex-between">
+                            <div>
+                                <p style="font-weight: bold; font-size: 1.1rem;">${msg.subject}</p>
+                                <p style="color: #4b5563;">from: ${msg.senderName}</p>
+                            </div>
+                            <div style="text-align: right;">
+                                <p style="font-size: 0.875rem; color: #6b7280;">${msg.timestamp ? new Date(msg.timestamp.toDate()).toLocaleDateString() : ''}</p>
+                                <span style="font-size: 0.75rem; background-color: #e5e7eb; padding: 0.25rem 0.5rem; border-radius: 9999px;">${msg.category || 'その他'}</span>
+                            </div>
+                        </div>
+                    `;
+                    item.addEventListener('click', () => renderMessageDetailView(msg));
+                    listEl.appendChild(item);
+                });
+            }, (error) => {
+                console.error("メッセージの取得エラー:", error);
+                document.getElementById('messageList').innerHTML = `<p class="error-text">メッセージの読み込みに失敗しました。</p>`;
+            });
+        };
 
-                auth.onAuthStateChanged(async (user) => {
-                    if (user) {
-                        userId = user.uid;
-                        // Listen to profile changes
-                        db.doc(`artifacts/${appId}/users/${userId}/profile/userProfile`)
-                          .onSnapshot((profileSnap) => {
-                              userProfile = profileSnap.exists ? profileSnap.data() : null;
-                              isAuthReady = true;
-                              updateUI();
-                          }, (error) => {
-                              console.error("Error listening to profile:", error);
-                              userProfile = null;
-                              isAuthReady = true;
-                              updateUI();
-                          });
-                    } else {
-                        userId = null;
-                        userProfile = null;
-                        if (initialAuthToken) {
-                            try {
-                                await auth.signInWithCustomToken(initialAuthToken);
-                            } catch (error) {
-                                console.error("Failed to sign in with custom token, falling back to anonymous:", error);
-                                await auth.signInAnonymously();
-                            }
-                        } else {
-                            await auth.signInAnonymously();
-                        }
+        const renderMessageDetailView = (msg) => {
+            const container = document.getElementById('messages-content');
+            container.innerHTML = `
+                <button id="backToListBtn" class="btn btn-secondary" style="margin-bottom: 1.5rem;">&lt; 一覧に戻る</button>
+                <div style="padding: 1.5rem; background: white; border-radius: 0.75rem; border: 1px solid #e5e7eb;">
+                    <div class="flex-between" style="margin-bottom: 0.5rem;">
+                        <h3 style="font-size: 1.5rem; font-weight: bold; margin:0;">${msg.subject}</h3>
+                        <span style="font-size: 0.875rem; background-color: #e5e7eb; padding: 0.25rem 0.5rem; border-radius: 9999px;">${msg.category}</span>
+                    </div>
+                    <div class="flex-between" style="font-size: 0.875rem; color: #6b7280; margin-bottom: 1rem; border-bottom: 1px solid #e5e7eb; padding-bottom: 0.5rem;">
+                        <span>From: ${msg.senderName}</span>
+                        <span>${msg.timestamp ? new Date(msg.timestamp.toDate()).toLocaleString() : ''}</span>
+                    </div>
+                    <p style="white-space: pre-wrap; line-height: 1.6;">${msg.body}</p>
+                    ${msg.senderId === userId ? `<button id="deleteMsgBtn" class="btn btn-primary" style="background-color: #ef4444; width: 100%; margin-top: 1.5rem;">このメッセージを削除</button>` : ''}
+                </div>
+            `;
+            document.getElementById('backToListBtn').addEventListener('click', renderMessageListView);
+            if (msg.senderId === userId) {
+                 document.getElementById('deleteMsgBtn').addEventListener('click', async () => {
+                    if (confirm('このメッセージを本当に削除しますか？')) {
+                        await deleteDoc(doc(db, `artifacts/${appId}/public/data/messages`, msg.id));
+                        renderMessageListView(); // Go back to list view
                     }
                 });
-            } catch (error) {
-                console.error("Firebase initialization failed:", error);
-                document.getElementById('view-loading').innerHTML = `<p class="error-text">アプリの初期化に失敗しました。設定を確認してください。</p>`;
             }
+        };
+        
+        const renderCreateMessageForm = () => {
+            const categories = ['練習案内', 'お祭り関連', 'お部屋', '三役', 'お動画', '集金', 'その他'];
+            const container = document.getElementById('messages-content');
+            container.innerHTML = `
+                <h2 class="content-title">新規メッセージ作成</h2>
+                <div id="createMsgError" class="error-text" style="padding: 0 0 1rem 0;"></div>
+                <div class="space-y-4">
+                    <div>
+                        <label class="form-label">ジャンル:</label>
+                        <select id="newMsgCategory" class="form-select">${categories.map(c => `<option value="${c}">${c}</option>`).join('')}</select>
+                    </div>
+                    <div>
+                        <label class="form-label">件名:</label>
+                        <input type="text" id="newMsgSubject" class="form-input" />
+                    </div>
+                    <div>
+                        <label class="form-label">本文:</label>
+                        <textarea id="newMsgBody" rows="10" class="form-textarea"></textarea>
+                    </div>
+                    <div style="display: flex; justify-content: flex-end; gap: 1rem; margin-top: 1rem;">
+                        <button id="cancelMsgBtn" class="btn btn-secondary">キャンセル</button>
+                        <button id="sendMsgBtn" class="btn btn-primary">送信</button>
+                    </div>
+                </div>
+            `;
+
+            document.getElementById('cancelMsgBtn').addEventListener('click', renderMessageListView);
+            document.getElementById('sendMsgBtn').addEventListener('click', async () => {
+                const btn = document.getElementById('sendMsgBtn');
+                const errorDiv = document.getElementById('createMsgError');
+                errorDiv.textContent = '';
+                
+                const messageData = {
+                    subject: document.getElementById('newMsgSubject').value.trim(),
+                    body: document.getElementById('newMsgBody').value.trim(),
+                    category: document.getElementById('newMsgCategory').value
+                };
+
+                if (!messageData.subject || !messageData.body) {
+                    errorDiv.textContent = '件名と本文を入力してください。';
+                    return;
+                }
+                
+                btn.textContent = '送信中...';
+                btn.disabled = true;
+
+                try {
+                    await addDoc(collection(db, `artifacts/${appId}/public/data/messages`), {
+                        ...messageData,
+                        senderId: userId,
+                        senderName: userProfile.yosana,
+                        timestamp: serverTimestamp()
+                    });
+                    renderMessageListView();
+                } catch (e) {
+                    console.error("メッセージ送信エラー:", e);
+                    errorDiv.textContent = 'メッセージの送信に失敗しました。';
+                    btn.textContent = '送信';
+                    btn.disabled = false;
+                }
+            });
+        };
+        
+        // --- CALENDAR ---
+        const renderCalendar = () => {
+            // Calendar implementation would be very long. Adding a placeholder for now.
+            // A full implementation would involve creating a grid, handling date clicks,
+            // fetching events from Firestore for the visible month, and rendering a form to add/edit events.
+            views.calendar.innerHTML = `<h2 class="content-title">カレンダー</h2><p class="info-text">この機能は現在開発中です。</p>`;
+        }
+        
+        // --- PRACTICE ROOMS ---
+        const renderPracticeRooms = () => {
+            views.rooms.innerHTML = `<h2 class="content-title">練習部屋</h2><p class="info-text">この機能は現在開発中です。</p>`;
         }
 
-        // --- APP START ---
+        // --- ROSTERS ---
+        const renderRosters = () => {
+            views.rosters.innerHTML = `<h2 class="content-title">隊列表</h2><p class="info-text">この機能は現在開発中です。</p>`;
+            // This would involve fetching "expeditions", then "stages", and displaying images.
+            // Image upload can be complex; storing as Base64 in Firestore is simpler but not recommended for large images.
+            // A better approach uses Firebase Storage.
+        }
         
-        // Add event listeners
-        document.getElementById('themeSelector').addEventListener('change', handleThemeChange);
-        Object.values(tabs).forEach(tab => tab.addEventListener('click', handleTabClick));
+        // --- SPONSORSHIPS ---
+        const renderSponsorships = () => {
+            views.sponsorships.innerHTML = `<h2 class="content-title">学生協賛</h2><p class="info-text">この機能は現在開発中です。</p>`;
+        }
+        
+        // --- COLLECTION ---
+        const renderCollection = () => {
+            views.collection.innerHTML = `<h2 class="content-title">集金</h2><p class="info-text">この機能は現在開発中です。</p>`;
+        }
+
+
+        // --- EVENT LISTENERS ---
+
+        // Navigation Tabs
+        navButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                if (userProfile) { // Only allow switching if logged in and has profile
+                    switchView(button.dataset.tab);
+                }
+            });
+        });
+        
+        // Theme Selector
+        document.getElementById('themeSelector').addEventListener('change', (e) => {
+            document.body.className = `theme-${e.target.value}`;
+        });
         
         // Nav scroller arrows
         const scroller = document.getElementById('navScroller');
         const leftArrow = document.getElementById('navScrollLeft');
         const rightArrow = document.getElementById('navScrollRight');
         
-        function checkScroll() {
+        const checkScroll = () => {
             if (!scroller) return;
-            leftArrow.style.display = scroller.scrollLeft > 0 ? 'flex' : 'none';
-            rightArrow.style.display = scroller.scrollLeft + scroller.clientWidth < scroller.scrollWidth - 1 ? 'flex' : 'none';
-        }
+            const hasOverflow = scroller.scrollWidth > scroller.clientWidth;
+            leftArrow.style.display = hasOverflow && scroller.scrollLeft > 0 ? 'flex' : 'none';
+            rightArrow.style.display = hasOverflow && scroller.scrollLeft + scroller.clientWidth < scroller.scrollWidth - 1 ? 'flex' : 'none';
+        };
         
         scroller.addEventListener('scroll', checkScroll);
         window.addEventListener('resize', checkScroll);
         leftArrow.addEventListener('click', () => scroller.scrollLeft -= scroller.clientWidth * 0.8);
         rightArrow.addEventListener('click', () => scroller.scrollLeft += scroller.clientWidth * 0.8);
         
-        // Initialize the app
-        initialize();
         // Initial check
         setTimeout(checkScroll, 100);
 
