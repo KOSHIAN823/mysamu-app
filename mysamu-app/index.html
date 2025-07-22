@@ -236,7 +236,8 @@
             padding: 0.75rem;
             border: 1px solid #d1d5db;
             border-radius: 0.5rem;
-            font-size: 1.125rem;
+            font-size: 1rem;
+            transition: all 0.2s;
         }
         .form-input:focus, .form-select:focus, .form-textarea:focus {
             outline: none;
@@ -262,7 +263,8 @@
             font-size: 1rem;
         }
         .btn:disabled {
-            background-color: #9ca3af;
+            background-color: #9ca3af !important;
+            color: #e5e7eb !important;
             cursor: not-allowed;
         }
         .btn-primary {
@@ -291,8 +293,8 @@
         .calendar-day:hover { background-color: #fef2f2; }
         .calendar-day-empty { background-color: #f9fafb; cursor: default; }
         .calendar-day-today { border: 2px solid var(--selected-date-border); font-weight: 700; }
-        .calendar-day-selected { background-color: var(--selected-date-bg); box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); }
-        .calendar-day-number { font-size: 1.125rem; font-weight: 500; color: #1f2937; }
+        .calendar-day-selected { background-color: var(--selected-date-bg) !important; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); }
+        .calendar-day-number { font-size: 1rem; font-weight: 500; color: #1f2937; }
         .calendar-event-dot { width: 0.5rem; height: 0.5rem; background-color: var(--dot-color); border-radius: 9999px; margin-top: 0.25rem; }
 
         /* Modal Styles */
@@ -311,7 +313,7 @@
         .modal-message { font-size: 1.25rem; font-weight: 700; margin-bottom: 1.5rem; color: #1f2937; }
         .modal-button-container { display: flex; justify-content: center; gap: 1rem; }
 
-        /* Message/Item Lists */
+        /* Item Lists */
         .item-list-item {
             padding: 1rem; background-color: white; border-radius: 0.5rem;
             box-shadow: 0 1px 3px 0 rgba(0,0,0,0.1), 0 1px 2px 0 rgba(0,0,0,0.06);
@@ -329,6 +331,15 @@
 
         /* Footer */
         .app-footer { text-align: center; color: #4b5563; margin-top: 3rem; font-size: 1rem; }
+
+        .form-section {
+            padding: 1.5rem;
+            border: 1px solid #e5e7eb;
+            border-radius: 1rem;
+            background-color: #f9fafb;
+            box-shadow: inset 0 2px 4px 0 rgba(0,0,0,0.05);
+            margin-bottom: 2rem;
+        }
     </style>
 </head>
 <body class="theme-navyRedWhite">
@@ -386,7 +397,7 @@
         import { getAuth, onAuthStateChanged, signInAnonymously } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
         import { 
             getFirestore, doc, onSnapshot, setDoc, getDoc, serverTimestamp, 
-            addDoc, collection, query, orderBy, deleteDoc, runTransaction, where, updateDoc
+            addDoc, collection, query, orderBy, deleteDoc, runTransaction, where, updateDoc, getDocs
         } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
         
         // --- CONFIGURATION ---
@@ -394,7 +405,7 @@
             apiKey: "AIzaSyDiRayvEJ27XHrhwgpl0Fl2HkInpkssaHA",
             authDomain: "mysamu-app.firebaseapp.com",
             projectId: "mysamu-app",
-            storageBucket: "mysamu-app.firebasestorage.app",
+            storageBucket: "mysamu-app.appspot.com",
             messagingSenderId: "577582013908",
             appId: "1:577582013908:web:ff0ada048944d52131ca41",
             measurementId: "G-QPKGG0FZC5"
@@ -437,12 +448,12 @@
         const modalContainer = document.getElementById('modalContainer');
         const modalContent = document.getElementById('modalContent');
 
+        // --- UTILITY FUNCTIONS ---
+        const escapeHTML = str => str.replace(/[&<>"']/g, match => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[match]);
+        const formatDateToInput = (date) => { if (!date) return ''; return date.toISOString().split('T')[0]; };
+        
         // --- UI & VIEW MANAGEMENT ---
 
-        /**
-         * Switches the visible view and updates tab styles.
-         * @param {string} viewName - The name of the view to switch to.
-         */
         const switchView = (viewName) => {
             if (currentViewUnsubscribe) {
                 currentViewUnsubscribe(); // Detach old listener
@@ -456,11 +467,8 @@
             }
 
             navButtons.forEach(button => {
-                if (button.dataset.tab === viewName) {
-                    button.classList.replace('inactive', 'active');
-                } else {
-                    button.classList.replace('active', 'inactive');
-                }
+                button.classList.toggle('active', button.dataset.tab === viewName);
+                button.classList.toggle('inactive', button.dataset.tab !== viewName);
             });
 
             // Render the content for the new view
@@ -474,17 +482,12 @@
             }
         };
 
-        /**
-         * Main UI update function, called on auth state changes.
-         */
         const updateUI = () => {
             if (!isAuthReady) {
-                views.loading.classList.add('active');
-                views.auth.classList.remove('active');
+                switchView('loading');
             } else if (!userProfile) {
                 renderAuthScreen();
-                views.loading.classList.remove('active');
-                views.auth.classList.add('active');
+                switchView('auth');
             } else {
                 views.loading.classList.remove('active');
                 views.auth.classList.remove('active');
@@ -493,9 +496,25 @@
         };
         
         // --- MODAL ---
-        const showModal = (htmlContent) => {
-            modalContent.innerHTML = htmlContent;
+        const showModal = (message, isConfirm = false, onConfirm = null) => {
+            let buttonsHtml = isConfirm 
+                ? `<button id="modalConfirmBtn" class="btn btn-primary" style="background-color: #dc2626;">はい</button>
+                   <button id="modalCloseBtn" class="btn btn-secondary" style="background-color: #6b7280;">いいえ</button>`
+                : `<button id="modalCloseBtn" class="btn btn-primary">閉じる</button>`;
+
+            modalContent.innerHTML = `
+                <p class="modal-message">${escapeHTML(message)}</p>
+                <div class="modal-button-container">${buttonsHtml}</div>
+            `;
             modalContainer.classList.add('active');
+            
+            document.getElementById('modalCloseBtn').onclick = hideModal;
+            if (isConfirm && onConfirm) {
+                document.getElementById('modalConfirmBtn').onclick = () => {
+                    onConfirm();
+                    hideModal();
+                };
+            }
         };
         const hideModal = () => {
             modalContainer.classList.remove('active');
@@ -525,7 +544,7 @@
             } else {
                 userId = null;
                 userProfile = null;
-                isAuthReady = false; // Reset auth ready state
+                isAuthReady = false; 
                 try {
                     await signInAnonymously(auth);
                 } catch (error) {
@@ -540,7 +559,7 @@
                 <div class="content-card" style="max-width: 28rem; margin: 3rem auto;">
                     <h2 class="content-title">プロフィール登録</h2>
                     <p style="text-align: center; color: #4b5563; margin-bottom: 1.5rem;">MYSAMUアプリをご利用いただくために、あなたの情報を登録してください。</p>
-                    <div id="authError" class="error-text" style="padding: 0 0 1rem 0;"></div>
+                    <div id="authError" class="error-text" style="padding: 0 0 1rem 0; min-height: 24px;"></div>
                     <div class="space-y-4">
                         <div><label for="realName" class="form-label">本名:</label><input type="text" id="realName" class="form-input" required /></div>
                         <div><label for="yosana" class="form-label">よさな:</label><input type="text" id="yosana" class="form-input" required /></div>
@@ -602,10 +621,15 @@
 
         const renderMessageListView = () => {
             const container = document.getElementById('messages-content');
+            const categories = ['練習案内', 'お祭り関連', 'お部屋', '三役', 'お動画', '集金', 'その他'];
             container.innerHTML = `
-                <div class="flex-between" style="margin-bottom: 1.5rem;">
+                <div class="flex-between" style="margin-bottom: 1rem;">
                     <h2 class="content-title" style="text-align: left; margin: 0;">連絡ボード</h2>
                     <button id="newMessageBtn" class="btn btn-primary">新規作成</button>
+                </div>
+                 <div style="margin-bottom: 1.5rem; display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                    <button class="btn category-btn active" data-category="すべて">すべて</button>
+                    ${categories.map(cat => `<button class="btn category-btn" data-category="${escapeHTML(cat)}">${escapeHTML(cat)}</button>`).join('')}
                 </div>
                 <div id="messageList" class="space-y-4">
                     <p class="loading-text">メッセージを読み込み中...</p>
@@ -613,35 +637,57 @@
             `;
             document.getElementById('newMessageBtn').addEventListener('click', renderCreateMessageForm);
             
+            let allMessages = [];
+            
+            const renderFilteredMessages = (category) => {
+                const listEl = document.getElementById('messageList');
+                const filtered = category === 'すべて' ? allMessages : allMessages.filter(msg => msg.category === category);
+
+                if (filtered.length === 0) {
+                    listEl.innerHTML = `<p class="info-text">該当するメッセージはありません。</p>`;
+                    return;
+                }
+
+                listEl.innerHTML = filtered.map(msg => `
+                    <div class="item-list-item" data-message-id="${msg.id}">
+                        <div class="flex-between">
+                            <div>
+                                <p style="font-weight: bold; font-size: 1.1rem;">${escapeHTML(msg.subject)}</p>
+                                <p style="color: #4b5563;">from: ${escapeHTML(msg.senderName)}</p>
+                            </div>
+                            <div style="text-align: right;">
+                                <p style="font-size: 0.875rem; color: #6b7280;">${msg.timestamp ? new Date(msg.timestamp.toDate()).toLocaleDateString() : ''}</p>
+                                <span style="font-size: 0.75rem; background-color: #e5e7eb; padding: 0.25rem 0.5rem; border-radius: 9999px;">${escapeHTML(msg.category || 'その他')}</span>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            };
+
+            document.querySelectorAll('.category-btn').forEach(btn => {
+                btn.onclick = (e) => {
+                    document.querySelectorAll('.category-btn').forEach(b => b.classList.remove('active'));
+                    e.target.classList.add('active');
+                    renderFilteredMessages(e.target.dataset.category);
+                };
+            });
+
+            document.getElementById('messageList').onclick = (e) => {
+                const item = e.target.closest('.item-list-item');
+                if (item) {
+                    const msgId = item.dataset.messageId;
+                    const selectedMsg = allMessages.find(m => m.id === msgId);
+                    if (selectedMsg) renderMessageDetailView(selectedMsg);
+                }
+            };
+            
             const messagesRef = collection(db, `artifacts/${appId}/public/data/messages`);
             const q = query(messagesRef, orderBy('timestamp', 'desc'));
 
             currentViewUnsubscribe = onSnapshot(q, (snapshot) => {
-                const listEl = document.getElementById('messageList');
-                if (snapshot.empty) {
-                    listEl.innerHTML = `<p class="info-text">メッセージはまだありません。</p>`;
-                    return;
-                }
-                listEl.innerHTML = '';
-                snapshot.forEach(docSnap => {
-                    const msg = { id: docSnap.id, ...docSnap.data() };
-                    const item = document.createElement('div');
-                    item.className = 'item-list-item';
-                    item.innerHTML = `
-                        <div class="flex-between">
-                            <div>
-                                <p style="font-weight: bold; font-size: 1.1rem;">${msg.subject}</p>
-                                <p style="color: #4b5563;">from: ${msg.senderName}</p>
-                            </div>
-                            <div style="text-align: right;">
-                                <p style="font-size: 0.875rem; color: #6b7280;">${msg.timestamp ? new Date(msg.timestamp.toDate()).toLocaleDateString() : ''}</p>
-                                <span style="font-size: 0.75rem; background-color: #e5e7eb; padding: 0.25rem 0.5rem; border-radius: 9999px;">${msg.category || 'その他'}</span>
-                            </div>
-                        </div>
-                    `;
-                    item.addEventListener('click', () => renderMessageDetailView(msg));
-                    listEl.appendChild(item);
-                });
+                allMessages = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+                const activeCategory = document.querySelector('.category-btn.active').dataset.category;
+                renderFilteredMessages(activeCategory);
             }, (error) => {
                 console.error("メッセージの取得エラー:", error);
                 document.getElementById('messageList').innerHTML = `<p class="error-text">メッセージの読み込みに失敗しました。</p>`;
@@ -654,26 +700,17 @@
                 <button id="backToListBtn" class="btn btn-secondary" style="margin-bottom: 1.5rem;">&lt; 一覧に戻る</button>
                 <div style="padding: 1.5rem; background: white; border-radius: 0.75rem; border: 1px solid #e5e7eb;">
                     <div class="flex-between" style="margin-bottom: 0.5rem;">
-                        <h3 style="font-size: 1.5rem; font-weight: bold; margin:0;">${msg.subject}</h3>
-                        <span style="font-size: 0.875rem; background-color: #e5e7eb; padding: 0.25rem 0.5rem; border-radius: 9999px;">${msg.category}</span>
+                        <h3 style="font-size: 1.5rem; font-weight: bold; margin:0;">${escapeHTML(msg.subject)}</h3>
+                        <span style="font-size: 0.875rem; background-color: #e5e7eb; padding: 0.25rem 0.5rem; border-radius: 9999px;">${escapeHTML(msg.category)}</span>
                     </div>
                     <div class="flex-between" style="font-size: 0.875rem; color: #6b7280; margin-bottom: 1rem; border-bottom: 1px solid #e5e7eb; padding-bottom: 0.5rem;">
-                        <span>From: ${msg.senderName}</span>
+                        <span>From: ${escapeHTML(msg.senderName)}</span>
                         <span>${msg.timestamp ? new Date(msg.timestamp.toDate()).toLocaleString() : ''}</span>
                     </div>
-                    <p style="white-space: pre-wrap; line-height: 1.6;">${msg.body}</p>
-                    ${msg.senderId === userId ? `<button id="deleteMsgBtn" class="btn btn-primary" style="background-color: #ef4444; width: 100%; margin-top: 1.5rem;">このメッセージを削除</button>` : ''}
+                    <p style="white-space: pre-wrap; line-height: 1.6;">${escapeHTML(msg.body)}</p>
                 </div>
             `;
             document.getElementById('backToListBtn').addEventListener('click', renderMessageListView);
-            if (msg.senderId === userId) {
-                 document.getElementById('deleteMsgBtn').addEventListener('click', async () => {
-                    if (confirm('このメッセージを本当に削除しますか？')) {
-                        await deleteDoc(doc(db, `artifacts/${appId}/public/data/messages`, msg.id));
-                        renderMessageListView(); // Go back to list view
-                    }
-                });
-            }
         };
         
         const renderCreateMessageForm = () => {
@@ -715,7 +752,7 @@
                 };
 
                 if (!messageData.subject || !messageData.body) {
-                    errorDiv.textContent = '件名と本文を入力してください。';
+                    errorDiv.textContent = '件名、本文、ジャンルをすべて入力してください。';
                     return;
                 }
                 
@@ -726,7 +763,7 @@
                     await addDoc(collection(db, `artifacts/${appId}/public/data/messages`), {
                         ...messageData,
                         senderId: userId,
-                        senderName: userProfile.yosana,
+                        senderName: userProfile.yosana || '匿名',
                         timestamp: serverTimestamp()
                     });
                     renderMessageListView();
@@ -741,29 +778,644 @@
         
         // --- CALENDAR ---
         const renderCalendar = () => {
-            // Calendar implementation would be very long. Adding a placeholder for now.
-            // A full implementation would involve creating a grid, handling date clicks,
-            // fetching events from Firestore for the visible month, and rendering a form to add/edit events.
-            views.calendar.innerHTML = `<h2 class="content-title">カレンダー</h2><p class="info-text">この機能は現在開発中です。</p>`;
-        }
-        
+            let currentMonth = new Date();
+            let selectedDate = new Date();
+            let events = [];
+
+            const draw = () => {
+                const weekdays = ['日', '月', '火', '水', '木', '金', '土'];
+                const year = currentMonth.getFullYear();
+                const month = currentMonth.getMonth();
+                const firstDay = new Date(year, month, 1);
+                const lastDay = new Date(year, month + 1, 0);
+                const daysInMonth = [];
+                for (let i = 0; i < firstDay.getDay(); i++) { daysInMonth.push(null); }
+                for (let i = 1; i <= lastDay.getDate(); i++) { daysInMonth.push(new Date(year, month, i)); }
+
+                const hasEventOnDate = (date) => {
+                     if (!date) return false;
+                     return events.some(event => {
+                         const eventStart = new Date(event.startDate.toDate()); eventStart.setHours(0,0,0,0);
+                         const eventEnd = new Date(event.endDate.toDate()); eventEnd.setHours(0,0,0,0);
+                         return date >= eventStart && date <= eventEnd;
+                     });
+                };
+                
+                const eventsForSelectedDate = events.filter(event => {
+                    const eventStart = new Date(event.startDate.toDate()); eventStart.setHours(0,0,0,0);
+                    const eventEnd = new Date(event.endDate.toDate()); eventEnd.setHours(0,0,0,0);
+                    return selectedDate >= eventStart && selectedDate <= eventEnd;
+                }).sort((a, b) => a.startDate.toDate() - b.startDate.toDate());
+
+                views.calendar.innerHTML = `
+                    <h2 class="content-title">カレンダー</h2>
+                    <div id="calendarError" class="error-text" style="padding: 0 0 1rem 0;"></div>
+                    <div class="flex-between" style="padding: 1rem; background-color: #f9fafb; border-radius: 1rem; margin-bottom: 1rem;">
+                        <button id="prevMonthBtn" class="btn btn-secondary">&lt; 前の月</button>
+                        <h3 style="font-size: 1.5rem; font-weight: bold;">${year}年 ${month + 1}月</h3>
+                        <button id="nextMonthBtn" class="btn btn-secondary">次の月 &gt;</button>
+                    </div>
+                    <div class="calendar-grid">
+                        ${weekdays.map(day => `<div class="calendar-weekday">${day}</div>`).join('')}
+                        ${daysInMonth.map(date => {
+                            if (!date) return `<div class="calendar-day calendar-day-empty"></div>`;
+                            const todayClass = date.toDateString() === new Date().toDateString() ? 'calendar-day-today' : '';
+                            const selectedClass = selectedDate && date.toDateString() === selectedDate.toDateString() ? 'calendar-day-selected' : '';
+                            return `
+                                <div class="calendar-day ${todayClass} ${selectedClass}" data-date="${date.toISOString()}">
+                                    <span class="calendar-day-number">${date.getDate()}</span>
+                                    ${hasEventOnDate(date) ? '<div class="calendar-event-dot"></div>' : ''}
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+
+                    <div class="form-section">
+                        <h3 style="font-size: 1.25rem; font-weight: bold; margin-bottom: 1rem;">イベントを追加</h3>
+                        <div class="space-y-4">
+                            <div><label class="form-label">イベントタイトル:</label><input type="text" id="newEventTitle" class="form-input" /></div>
+                            <div style="display: flex; gap: 1rem;">
+                                <div style="flex: 1;"><label class="form-label">開始日:</label><input type="date" id="newEventStartDate" class="form-input" /></div>
+                                <div style="flex: 1;"><label class="form-label">終了日:</label><input type="date" id="newEventEndDate" class="form-input" /></div>
+                            </div>
+                            <div><label class="form-label">詳細:</label><textarea id="newEventDescription" rows="3" class="form-textarea"></textarea></div>
+                            <button id="addEventBtn" class="btn btn-primary" style="width: 100%;">イベントを追加</button>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <h3 style="font-size: 1.25rem; font-weight: bold; margin-bottom: 1rem;">${selectedDate.getMonth() + 1}月${selectedDate.getDate()}日のイベント一覧</h3>
+                        <div id="eventList" class="space-y-4">
+                            ${eventsForSelectedDate.length === 0 ? '<p class="info-text">この日のイベントはありません。</p>' : eventsForSelectedDate.map(event => `
+                                <div class="item-list-item flex-between">
+                                    <div>
+                                        <h4 style="font-weight: bold; font-size: 1.1rem;">${escapeHTML(event.title)}</h4>
+                                        <p style="color: #6b7280; font-size: 0.9rem;">期間: ${formatDateToInput(event.startDate.toDate())} ~ ${formatDateToInput(event.endDate.toDate())}</p>
+                                        ${event.description ? `<p style="color: #374151; white-space: pre-wrap; margin-top: 0.5rem;">${escapeHTML(event.description)}</p>` : ''}
+                                    </div>
+                                    ${event.creatorId === userId ? `<button class="btn btn-secondary delete-event-btn" data-event-id="${event.id}" style="background-color: #ef4444; flex-shrink: 0; margin-left: 1rem;">削除</button>` : ''}
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+                
+                document.getElementById('newEventStartDate').value = formatDateToInput(selectedDate);
+                document.getElementById('newEventEndDate').value = formatDateToInput(selectedDate);
+                
+                // Add event listeners
+                document.getElementById('prevMonthBtn').onclick = () => { currentMonth.setMonth(currentMonth.getMonth() - 1); draw(); };
+                document.getElementById('nextMonthBtn').onclick = () => { currentMonth.setMonth(currentMonth.getMonth() + 1); draw(); };
+                document.querySelectorAll('.calendar-day').forEach(day => {
+                    if (day.dataset.date) {
+                        day.onclick = () => { selectedDate = new Date(day.dataset.date); draw(); };
+                    }
+                });
+                document.getElementById('addEventBtn').onclick = handleAddEvent;
+                document.querySelectorAll('.delete-event-btn').forEach(btn => {
+                    btn.onclick = () => {
+                        showModal('このイベントを削除してもよろしいですか？', true, () => handleDeleteEvent(btn.dataset.eventId));
+                    };
+                });
+            };
+
+            const handleAddEvent = async () => {
+                const title = document.getElementById('newEventTitle').value.trim();
+                const startDateStr = document.getElementById('newEventStartDate').value;
+                const endDateStr = document.getElementById('newEventEndDate').value;
+                const description = document.getElementById('newEventDescription').value.trim();
+                const errorDiv = document.getElementById('calendarError');
+                errorDiv.textContent = '';
+
+                if (!title || !startDateStr || !endDateStr) {
+                    errorDiv.textContent = 'タイトル、開始日、終了日を入力してください。';
+                    return;
+                }
+                const startDate = new Date(startDateStr);
+                const endDate = new Date(endDateStr);
+                if (startDate > endDate) {
+                    errorDiv.textContent = '終了日は開始日以降の日付を選択してください。';
+                    return;
+                }
+
+                try {
+                    await addDoc(collection(db, `artifacts/${appId}/public/data/calendarEvents`), {
+                        title, description, startDate, endDate, creatorId: userId, timestamp: serverTimestamp()
+                    });
+                    document.getElementById('newEventTitle').value = '';
+                    document.getElementById('newEventDescription').value = '';
+                    showModal('イベントを追加しました！');
+                } catch (e) {
+                    console.error("Error adding event:", e);
+                    errorDiv.textContent = 'イベントの追加に失敗しました。';
+                }
+            };
+            
+            const handleDeleteEvent = async (eventId) => {
+                try {
+                    await deleteDoc(doc(db, `artifacts/${appId}/public/data/calendarEvents`, eventId));
+                    showModal('イベントを削除しました！');
+                } catch (e) {
+                    console.error("Error deleting event:", e);
+                    document.getElementById('calendarError').textContent = 'イベントの削除に失敗しました。';
+                }
+            };
+
+            const eventsCollectionRef = collection(db, `artifacts/${appId}/public/data/calendarEvents`);
+            const q = query(eventsCollectionRef, orderBy('startDate'));
+            currentViewUnsubscribe = onSnapshot(q, (snapshot) => {
+                events = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                draw();
+            }, (err) => {
+                console.error("Error fetching events:", err);
+                document.getElementById('calendarError').textContent = 'カレンダーイベントの読み込みに失敗しました。';
+            });
+        };
+
         // --- PRACTICE ROOMS ---
         const renderPracticeRooms = () => {
-            views.rooms.innerHTML = `<h2 class="content-title">練習部屋</h2><p class="info-text">この機能は現在開発中です。</p>`;
-        }
+            let selectedDate = new Date();
+            let reservations = [];
+            let rooms = [];
+            
+            const periods = ['1限 (8:50-10:30)', '2限 (10:40-12:20)', '昼限 (12:20-13:10)', '3限 (13:10-14:50)', '4限 (15:05-16:45)', '5限 (17:00-18:40)', '6限 (18:55-20:35)', '夜限 (20:45-21:35)'];
+            const periodValues = periods.map(p => p.split(' ')[0]);
+            const formatDate = (date) => date.toISOString().split('T')[0];
+
+            const draw = () => {
+                const dateStr = formatDate(selectedDate);
+                const sortedReservations = reservations.filter(r => r.date === dateStr).sort((a,b) => periodValues.indexOf(a.period) - periodValues.indexOf(b.period));
+                const occupiedRooms = rooms.filter(room => room.currentOccupant);
+
+                views.rooms.innerHTML = `
+                    <h2 class="content-title">練習部屋予約</h2>
+                    <div id="roomError" class="error-text" style="padding: 0 0 1rem 0;"></div>
+                    <div class="flex-between" style="padding: 1rem; background-color: #f9fafb; border-radius: 1rem; margin-bottom: 1rem;">
+                        <button id="prevDayBtn" class="btn btn-secondary">&lt; 前日</button>
+                        <h3 style="font-size: 1.5rem; font-weight: bold;">${selectedDate.toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' })}</h3>
+                        <button id="nextDayBtn" class="btn btn-secondary">翌日 &gt;</button>
+                    </div>
+
+                    <div class="form-section">
+                        <h3 style="font-size: 1.25rem; font-weight: bold; margin-bottom: 1rem;">新規予約</h3>
+                         <div style="display: flex; flex-direction: column; gap: 1rem; md:flex-direction: row;">
+                            <select id="newPeriod" class="form-select">${periodValues.map(p => `<option value="${p}">${p}</option>`).join('')}</select>
+                            <input type="text" id="newRoom" placeholder="部屋名 (例: Aスタジオ)" class="form-input" />
+                            <button id="addReservationBtn" class="btn btn-primary">予約する</button>
+                         </div>
+                    </div>
+
+                    <div id="reservationList" class="space-y-4" style="margin-bottom: 3rem;">
+                        ${periods.map(periodWithTime => {
+                            const periodValue = periodWithTime.split(' ')[0];
+                            const periodReservations = sortedReservations.filter(r => r.period === periodValue);
+                            return `
+                                <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 1rem; align-items: start; padding-bottom: 1rem; border-bottom: 1px solid #e5e7eb;">
+                                    <div style="font-weight: bold; color: #374151;">${periodWithTime}</div>
+                                    <div class="space-y-4">
+                                        ${periodReservations.length > 0 ? periodReservations.map(res => `
+                                            <div class="flex-between" style="background: #fff; padding: 0.5rem; border-radius: 0.375rem; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                                                <div>
+                                                    <span style="font-weight: 600;">${escapeHTML(res.roomName)}</span>
+                                                    <span style="font-size: 0.8rem; color: #6b7280; margin-left: 0.5rem;">(${escapeHTML(res.reservedByName)})</span>
+                                                </div>
+                                                ${res.reservedByUserId === userId ? `<button class="delete-reservation-btn" data-period="${res.period}" data-room="${res.roomName}" style="color: #ef4444; background: none; border: none; cursor: pointer; font-weight: bold;">削除</button>` : ''}
+                                            </div>
+                                        `).join('') : '<p style="color: #9ca3af;">予約なし</p>'}
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+
+                    <hr style="margin: 3rem 0; border: none; border-top: 1px solid #d1d5db;"/>
+
+                    <h2 class="content-title">リアルタイム入室状況</h2>
+                     <div class="form-section">
+                        <h3 style="font-size: 1.25rem; font-weight: bold; margin-bottom: 1rem;">部屋にチェックイン</h3>
+                        <div style="display: flex; border-radius: 0.5rem; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                            <input type="text" id="newCheckInRoom" placeholder="使用する部屋名を入力..." class="form-input" style="border-radius: 0; border: none;" />
+                            <button id="checkInBtn" class="btn btn-primary" style="border-radius: 0;">チェックイン</button>
+                        </div>
+                    </div>
+
+                    <h3 style="font-size: 1.25rem; font-weight: bold; margin-bottom: 1rem;">現在使用中の部屋</h3>
+                    <div id="occupiedRoomsList" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 1.5rem;">
+                         ${occupiedRooms.length === 0 ? '<p class="info-text">現在使用中の部屋はありません。</p>' : occupiedRooms.map(room => `
+                            <div style="background: #fff; padding: 1rem; border-radius: 0.75rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                                <h4 style="font-weight: bold; font-size: 1.2rem;">${escapeHTML(room.name)}</h4>
+                                <p>使用中: <span style="font-weight: 600; color: var(--highlight-text);">${escapeHTML(room.currentOccupant.substring(0,8))}...</span></p>
+                                ${room.checkedInAt ? `<p style="font-size: 0.8rem; color: #6b7280;">チェックイン: ${new Date(room.checkedInAt.toDate()).toLocaleString()}</p>` : ''}
+                                ${room.occupantId === userId ? `<button class="btn btn-secondary check-out-btn" data-room-id="${room.id}" style="width: 100%; margin-top: 1rem;">チェックアウト</button>` : ''}
+                            </div>
+                         `).join('')}
+                    </div>
+                `;
+                
+                // Add event listeners
+                document.getElementById('prevDayBtn').onclick = () => { selectedDate.setDate(selectedDate.getDate() - 1); fetchReservationsForDate(selectedDate); };
+                document.getElementById('nextDayBtn').onclick = () => { selectedDate.setDate(selectedDate.getDate() + 1); fetchReservationsForDate(selectedDate); };
+                document.getElementById('addReservationBtn').onclick = handleAddReservation;
+                document.getElementById('checkInBtn').onclick = handleCheckIn;
+                document.querySelectorAll('.delete-reservation-btn').forEach(btn => btn.onclick = (e) => handleDeleteReservation(e.target.dataset.period, e.target.dataset.room));
+                document.querySelectorAll('.check-out-btn').forEach(btn => btn.onclick = (e) => handleCheckOut(e.target.dataset.roomId));
+            };
+            
+            const fetchReservationsForDate = (date) => {
+                const dateStr = formatDate(date);
+                const reservationDocRef = doc(db, `artifacts/${appId}/public/data/roomReservations`, dateStr);
+                onSnapshot(reservationDocRef, (docSnap) => {
+                    reservations = docSnap.exists() ? docSnap.data().reservations.map(r => ({...r, date: dateStr})) : [];
+                    draw();
+                }, (err) => {
+                    console.error("Error fetching reservations:", err);
+                    document.getElementById('roomError').textContent = '予約情報の読み込みに失敗しました。';
+                });
+            };
+            
+            const handleAddReservation = async () => {
+                const newPeriod = document.getElementById('newPeriod').value;
+                const newRoom = document.getElementById('newRoom').value.trim();
+                const errorDiv = document.getElementById('roomError');
+                errorDiv.textContent = '';
+                if (!newPeriod || !newRoom) { errorDiv.textContent = "時間と部屋名を入力してください。"; return; }
+                
+                const dateStr = formatDate(selectedDate);
+                const reservationDocRef = doc(db, `artifacts/${appId}/public/data/roomReservations`, dateStr);
+                try {
+                    await runTransaction(db, async (transaction) => {
+                        const docSnap = await transaction.get(reservationDocRef);
+                        const existingReservations = docSnap.exists() ? docSnap.data().reservations : [];
+                        const isTaken = existingReservations.some(res => res.period === newPeriod && res.roomName.toLowerCase() === newRoom.toLowerCase());
+                        if (isTaken) throw new Error(`${newRoom}は${newPeriod}に既に予約されています。`);
+                        
+                        const newReservationData = { period: newPeriod, roomName: newRoom, reservedByUserId: userId, reservedByName: userProfile.yosana };
+                        transaction.set(reservationDocRef, { reservations: [...existingReservations, newReservationData] }, { merge: true });
+                    });
+                    document.getElementById('newRoom').value = '';
+                } catch (e) { console.error(e); errorDiv.textContent = e.message; }
+            };
+
+            const handleDeleteReservation = async (period, roomName) => {
+                const dateStr = formatDate(selectedDate);
+                const reservationDocRef = doc(db, `artifacts/${appId}/public/data/roomReservations`, dateStr);
+                try {
+                    await runTransaction(db, async (transaction) => {
+                        const docSnap = await transaction.get(reservationDocRef);
+                        if (!docSnap.exists()) throw new Error("予約が見つかりません。");
+                        const existingReservations = docSnap.data().reservations;
+                        const newReservations = existingReservations.filter(res => !(res.period === period && res.roomName === roomName && res.reservedByUserId === userId));
+                        transaction.update(reservationDocRef, { reservations: newReservations });
+                    });
+                } catch (e) { console.error(e); document.getElementById('roomError').textContent = e.message; }
+            };
+            
+            const handleCheckIn = async () => {
+                const roomName = document.getElementById('newCheckInRoom').value.trim();
+                const errorDiv = document.getElementById('roomError');
+                errorDiv.textContent = '';
+                if (!roomName) { errorDiv.textContent = '部屋名を入力してください。'; return; }
+
+                const roomRef = doc(db, `artifacts/${appId}/public/data/practiceRooms`, roomName);
+                try {
+                    await runTransaction(db, async (transaction) => {
+                        const q = query(collection(db, `artifacts/${appId}/public/data/practiceRooms`), where("occupantId", "==", userId));
+                        const userRoomsSnapshot = await getDocs(q);
+                        if (!userRoomsSnapshot.empty) throw new Error(`あなたは既に「${userRoomsSnapshot.docs[0].data().name}」にいます。`);
+                        
+                        const roomSnap = await transaction.get(roomRef);
+                        if (roomSnap.exists() && roomSnap.data().currentOccupant) {
+                            throw new Error(`「${roomName}」は現在、他のユーザーが使用中です。`);
+                        }
+                        const data = { name: roomName, currentOccupant: userId, occupantId: userId, checkedInAt: serverTimestamp() };
+                        transaction.set(roomRef, data, { merge: true });
+                    });
+                    document.getElementById('newCheckInRoom').value = '';
+                } catch (e) { console.error(e); errorDiv.textContent = e.message; }
+            };
+
+            const handleCheckOut = async (roomId) => {
+                const roomRef = doc(db, `artifacts/${appId}/public/data/practiceRooms`, roomId);
+                try {
+                    await updateDoc(roomRef, { currentOccupant: null, occupantId: null, checkedInAt: null });
+                } catch (e) { console.error(e); document.getElementById('roomError').textContent = 'チェックアウトに失敗しました。'; }
+            };
+
+            const roomsCollectionRef = collection(db, `artifacts/${appId}/public/data/practiceRooms`);
+            const q = query(roomsCollectionRef, orderBy('name'));
+            const unsubscribeRooms = onSnapshot(q, (snapshot) => {
+                rooms = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                draw();
+            });
+
+            fetchReservationsForDate(selectedDate);
+
+            currentViewUnsubscribe = () => { unsubscribeRooms(); };
+        };
 
         // --- ROSTERS ---
         const renderRosters = () => {
-            views.rosters.innerHTML = `<h2 class="content-title">隊列表</h2><p class="info-text">この機能は現在開発中です。</p>`;
-            // This would involve fetching "expeditions", then "stages", and displaying images.
-            // Image upload can be complex; storing as Base64 in Firestore is simpler but not recommended for large images.
-            // A better approach uses Firebase Storage.
-        }
+            let view = 'expeditionList'; // expeditionList, stageList, stageDetail, create
+            let rosterData = [];
+            let selectedExpedition = null;
+            let selectedStage = null;
+            let imageBase64 = null;
+
+            const draw = () => {
+                let content = '';
+                if (view === 'create') {
+                    content = `
+                        <button id="backToRostersBtn" class="btn btn-secondary" style="margin-bottom: 1.5rem;">&lt; 一覧に戻る</button>
+                        <div class="form-section">
+                            <h3 class="content-title" style="text-align: left; margin: 0 0 1rem 0;">新規隊列表作成</h3>
+                            <div id="rosterError" class="error-text" style="padding: 0 0 1rem 0;"></div>
+                            <div class="space-y-4">
+                                <div><label class="form-label">遠征名:</label><input type="text" id="newExpeditionName" placeholder="例: 2025年度〇〇遠征" class="form-input" /></div>
+                                <div><label class="form-label">ステージ名:</label><input type="text" id="newStageName" placeholder="例: 〇〇ステージ" class="form-input" /></div>
+                                <div><label class="form-label">隊列表画像 (700KB未満):</label><input type="file" id="rosterImageFile" accept="image/*" class="form-input" /></div>
+                                <img id="rosterPreview" src="" alt="プレビュー" style="display: none; width: 100%; border-radius: 0.5rem; border: 1px solid #ccc; margin-top: 1rem;" />
+                                <button id="saveRosterBtn" class="btn btn-primary" style="width: 100%;">保存</button>
+                            </div>
+                        </div>
+                    `;
+                } else if (selectedStage) {
+                    content = `
+                        <button id="backToStageListBtn" class="btn btn-secondary" style="margin-bottom: 1.5rem;">&lt; ${escapeHTML(selectedExpedition.name)}の一覧に戻る</button>
+                        <h3 class="content-title">${escapeHTML(selectedStage.name)}</h3>
+                        ${selectedStage.rosterImageBase64 ? `<img src="${selectedStage.rosterImageBase64}" alt="${escapeHTML(selectedStage.name)} 隊列表" style="width: 100%; border-radius: 0.5rem;"/>` : '<p class="info-text">画像がありません</p>'}
+                    `;
+                } else if (selectedExpedition) {
+                    content = `
+                        <button id="backToExpeditionListBtn" class="btn btn-secondary" style="margin-bottom: 1.5rem;">&lt; 遠征一覧に戻る</button>
+                        <h3 class="content-title">${escapeHTML(selectedExpedition.name)}</h3>
+                        <div class="space-y-4">
+                            ${selectedExpedition.stages.map(stage => `
+                                <div class="item-list-item" data-stage-id="${stage.id}">
+                                    <span style="font-weight: 600;">${escapeHTML(stage.name)}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `;
+                } else { // expeditionList
+                    content = `
+                        <div class="flex-between" style="margin-bottom: 1.5rem;">
+                             <h2 class="content-title" style="text-align: left; margin: 0;">隊列表</h2>
+                             <button id="createRosterBtn" class="btn btn-primary">+ 新規作成</button>
+                        </div>
+                        <div id="expeditionList" class="space-y-4">
+                            ${rosterData.length > 0 ? rosterData.map(exp => `
+                                <div class="item-list-item" data-expedition-id="${exp.id}">
+                                    <span style="font-weight: bold; font-size: 1.2rem;">${escapeHTML(exp.name)}</span>
+                                </div>
+                            `).join('') : '<p class="info-text">隊列表はまだありません。</p>'}
+                        </div>
+                    `;
+                }
+                views.rosters.innerHTML = content;
+                addRosterEventListeners();
+            };
+
+            const addRosterEventListeners = () => {
+                if (view === 'create') {
+                    document.getElementById('backToRostersBtn').onclick = () => { view = 'expeditionList'; draw(); };
+                    document.getElementById('saveRosterBtn').onclick = handleSaveRoster;
+                    document.getElementById('rosterImageFile').onchange = handleFileChange;
+                } else if (selectedStage) {
+                    document.getElementById('backToStageListBtn').onclick = () => { selectedStage = null; draw(); };
+                } else if (selectedExpedition) {
+                    document.getElementById('backToExpeditionListBtn').onclick = () => { selectedExpedition = null; draw(); };
+                    document.querySelectorAll('.item-list-item').forEach(item => {
+                        item.onclick = () => {
+                            selectedStage = selectedExpedition.stages.find(s => s.id === item.dataset.stageId);
+                            draw();
+                        };
+                    });
+                } else { // expeditionList
+                    document.getElementById('createRosterBtn').onclick = () => { view = 'create'; draw(); };
+                     document.querySelectorAll('.item-list-item').forEach(item => {
+                        item.onclick = () => {
+                            selectedExpedition = rosterData.find(e => e.id === item.dataset.expeditionId);
+                            draw();
+                        };
+                    });
+                }
+            };
+            
+            const handleFileChange = (e) => {
+                const file = e.target.files[0];
+                const errorDiv = document.getElementById('rosterError');
+                const preview = document.getElementById('rosterPreview');
+                errorDiv.textContent = '';
+                imageBase64 = null;
+                preview.style.display = 'none';
+
+                if (file) {
+                    if (file.size > 700 * 1024) {
+                        errorDiv.textContent = '画像ファイルが大きすぎます。700KB未満のファイルを選択してください。';
+                        e.target.value = ''; // Reset file input
+                        return;
+                    }
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                        imageBase64 = reader.result;
+                        preview.src = reader.result;
+                        preview.style.display = 'block';
+                    };
+                    reader.readAsDataURL(file);
+                }
+            };
+            
+            const handleSaveRoster = async () => {
+                const expName = document.getElementById('newExpeditionName').value.trim();
+                const stageName = document.getElementById('newStageName').value.trim();
+                const errorDiv = document.getElementById('rosterError');
+                const btn = document.getElementById('saveRosterBtn');
+                errorDiv.textContent = '';
+
+                if (!expName || !stageName || !imageBase64) {
+                    errorDiv.textContent = 'すべての項目を入力してください。';
+                    return;
+                }
+
+                btn.disabled = true;
+                btn.textContent = '保存中...';
+
+                try {
+                    const sanitizeForId = (name) => name.trim().toLowerCase().replace(/\s+/g, '-').replace(/[.#$[\]/]/g, '_');
+                    const expeditionId = sanitizeForId(expName);
+                    const stageId = sanitizeForId(stageName);
+
+                    const expeditionRef = doc(db, `artifacts/${appId}/public/data/expeditions`, expeditionId);
+                    await setDoc(expeditionRef, { name: expName, uploaderId: userId, timestamp: serverTimestamp() }, { merge: true });
+
+                    const stageRef = doc(db, `artifacts/${appId}/public/data/expeditions/${expeditionId}/stages`, stageId);
+                    await setDoc(stageRef, { name: stageName, rosterImageBase64: imageBase64, uploaderId: userId, timestamp: serverTimestamp() });
+                    
+                    view = 'expeditionList';
+                    // The onSnapshot listener will handle the redraw.
+                } catch (e) {
+                    console.error("Error saving roster:", e);
+                    errorDiv.textContent = '隊列表の保存に失敗しました。';
+                    btn.disabled = false;
+                    btn.textContent = '保存';
+                }
+            };
+
+            const expeditionsCollectionRef = collection(db, `artifacts/${appId}/public/data/expeditions`);
+            const q = query(expeditionsCollectionRef, orderBy('timestamp', 'desc'));
+            currentViewUnsubscribe = onSnapshot(q, async (expeditionsSnapshot) => {
+                rosterData = await Promise.all(expeditionsSnapshot.docs.map(async (doc) => {
+                    const exp = { id: doc.id, ...doc.data() };
+                    const stagesCollectionRef = collection(db, `artifacts/${appId}/public/data/expeditions/${exp.id}/stages`);
+                    const stagesQuery = query(stagesCollectionRef, orderBy('timestamp', 'asc'));
+                    const stagesSnapshot = await getDocs(stagesQuery);
+                    exp.stages = stagesSnapshot.docs.map(stageDoc => ({ id: stageDoc.id, ...stageDoc.data() }));
+                    return exp;
+                }));
+                draw();
+            });
+        };
         
         // --- SPONSORSHIPS ---
         const renderSponsorships = () => {
-            views.sponsorships.innerHTML = `<h2 class="content-title">学生協賛</h2><p class="info-text">この機能は現在開発中です。</p>`;
-        }
+            let formMode = null; // null, 'add', 'edit'
+            let sponsorships = [];
+            let currentFormData = { id: null, title: '', url: '', description: '', expirationDate: '' };
+
+            const draw = () => {
+                const activeSponsorships = sponsorships.filter(s => !s.isExpired);
+                const expiredSponsorships = sponsorships.filter(s => s.isExpired);
+
+                views.sponsorships.innerHTML = `
+                    <h2 class="content-title">学生協賛</h2>
+                    <div id="sponsorshipError" class="error-text" style="padding: 0 0 1rem 0;"></div>
+                    ${!formMode ? `<div style="text-align: right; margin-bottom: 1.5rem;"><button id="addNewSponsorshipBtn" class="btn btn-primary">+ 新規協賛を追加</button></div>` : ''}
+                    
+                    <div id="sponsorshipFormContainer"></div>
+
+                    <h3 class="content-title" style="font-size: 1.5rem; margin-top: 2rem; margin-bottom: 1rem;">実施中の協賛一覧</h3>
+                    <div class="space-y-4">
+                        ${activeSponsorships.length > 0 ? activeSponsorships.map(item => sponsorshipItemHtml(item)).join('') : '<p class="info-text">実施中の協賛はありません。</p>'}
+                    </div>
+
+                    <h3 class="content-title" style="font-size: 1.5rem; margin-top: 2rem; margin-bottom: 1rem; color: #6b7280;">期限切れの協賛</h3>
+                     <div class="space-y-4">
+                        ${expiredSponsorships.length > 0 ? expiredSponsorships.map(item => sponsorshipItemHtml(item)).join('') : '<p class="info-text">期限切れの協賛はありません。</p>'}
+                    </div>
+                `;
+                if (formMode) drawForm();
+                addSponsorshipEventListeners();
+            };
+            
+            const sponsorshipItemHtml = (item) => `
+                <div class="item-list-item flex-between" style="${item.isExpired ? 'background-color: #f3f4f6; color: #6b7280;' : ''}">
+                    <a href="${escapeHTML(item.url)}" target="_blank" rel="noopener noreferrer" style="text-decoration: none; color: inherit; flex-grow: 1;">
+                        <span style="font-weight: bold; font-size: 1.1rem;">${escapeHTML(item.title)}</span>
+                        <span style="display: block; font-size: 0.9rem;">期限: ${item.expirationDate || 'なし'}</span>
+                        ${item.description ? `<p style="font-size: 0.9rem; margin-top: 0.5rem;">${escapeHTML(item.description)}</p>` : ''}
+                    </a>
+                    ${item.uploaderId === userId ? `
+                        <div style="display: flex; gap: 0.5rem; margin-left: 1rem;">
+                            <button class="btn btn-secondary edit-sponsorship-btn" data-item-id="${item.id}" style="padding: 0.25rem 0.75rem; font-size: 0.8rem;">編集</button>
+                            <button class="btn btn-secondary delete-sponsorship-btn" data-item-id="${item.id}" style="padding: 0.25rem 0.75rem; font-size: 0.8rem; background-color: #ef4444;">削除</button>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+            
+            const drawForm = () => {
+                document.getElementById('sponsorshipFormContainer').innerHTML = `
+                    <div class="form-section">
+                        <h3 class="content-title" style="text-align: left; margin: 0 0 1rem 0;">${formMode === 'add' ? '新しい協賛を追加' : '協賛を編集'}</h3>
+                        <div class="space-y-4">
+                            <div><label class="form-label">協賛タイトル:</label><input type="text" id="sponsorshipTitle" class="form-input" value="${escapeHTML(currentFormData.title)}"></div>
+                            <div><label class="form-label">協賛の期限:</label><input type="date" id="sponsorshipExpiration" class="form-input" value="${escapeHTML(currentFormData.expirationDate)}"></div>
+                            <div><label class="form-label">URL:</label><input type="url" id="sponsorshipUrl" placeholder="https://example.com" class="form-input" value="${escapeHTML(currentFormData.url)}"></div>
+                            <div><label class="form-label">詳細:</label><textarea id="sponsorshipDesc" rows="3" class="form-textarea">${escapeHTML(currentFormData.description)}</textarea></div>
+                            <div style="display: flex; justify-content: flex-end; gap: 1rem;">
+                                <button id="cancelSponsorshipFormBtn" class="btn btn-secondary">キャンセル</button>
+                                <button id="saveSponsorshipBtn" class="btn btn-primary">保存</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                document.getElementById('cancelSponsorshipFormBtn').onclick = () => { formMode = null; draw(); };
+                document.getElementById('saveSponsorshipBtn').onclick = handleSaveSponsorship;
+            };
+
+            const addSponsorshipEventListeners = () => {
+                if (!formMode) document.getElementById('addNewSponsorshipBtn').onclick = () => {
+                    formMode = 'add';
+                    currentFormData = { id: null, title: '', url: '', description: '', expirationDate: '' };
+                    draw();
+                };
+                document.querySelectorAll('.edit-sponsorship-btn').forEach(btn => btn.onclick = (e) => {
+                    e.stopPropagation();
+                    const item = sponsorships.find(s => s.id === e.target.dataset.itemId);
+                    if (item) {
+                        formMode = 'edit';
+                        currentFormData = { ...item };
+                        draw();
+                    }
+                });
+                document.querySelectorAll('.delete-sponsorship-btn').forEach(btn => btn.onclick = (e) => {
+                    e.stopPropagation();
+                    const item = sponsorships.find(s => s.id === e.target.dataset.itemId);
+                    if(item) showModal('この協賛情報を削除しますか？', true, () => handleDeleteSponsorship(item.id));
+                });
+            };
+            
+            const handleSaveSponsorship = async () => {
+                const errorDiv = document.getElementById('sponsorshipError');
+                errorDiv.textContent = '';
+                const dataToSave = {
+                    title: document.getElementById('sponsorshipTitle').value.trim(),
+                    url: document.getElementById('sponsorshipUrl').value.trim(),
+                    description: document.getElementById('sponsorshipDesc').value.trim(),
+                    expirationDate: document.getElementById('sponsorshipExpiration').value,
+                };
+                if (!dataToSave.title || !dataToSave.url || !dataToSave.expirationDate) {
+                    errorDiv.textContent = 'タイトル、URL、期限をすべて入力してください。';
+                    return;
+                }
+                
+                try {
+                    if (formMode === 'edit') {
+                        const docRef = doc(db, `artifacts/${appId}/public/data/studentSponsorships`, currentFormData.id);
+                        await updateDoc(docRef, dataToSave);
+                    } else {
+                        await addDoc(collection(db, `artifacts/${appId}/public/data/studentSponsorships`), { ...dataToSave, uploaderId: userId, timestamp: serverTimestamp() });
+                    }
+                    formMode = null;
+                    // Listener will redraw
+                } catch (e) {
+                    console.error("Error saving sponsorship:", e);
+                    errorDiv.textContent = '協賛情報の保存に失敗しました。';
+                }
+            };
+            
+            const handleDeleteSponsorship = async (itemId) => {
+                try {
+                    await deleteDoc(doc(db, `artifacts/${appId}/public/data/studentSponsorships`, itemId));
+                } catch (e) {
+                    console.error("Error deleting sponsorship:", e);
+                    document.getElementById('sponsorshipError').textContent = "削除に失敗しました。";
+                }
+            };
+
+            const sponsorshipsCollectionRef = collection(db, `artifacts/${appId}/public/data/studentSponsorships`);
+            const q = query(sponsorshipsCollectionRef, orderBy('expirationDate', 'desc'));
+            currentViewUnsubscribe = onSnapshot(q, (snapshot) => {
+                const now = new Date();
+                now.setHours(0, 0, 0, 0); 
+                sponsorships = snapshot.docs.map(doc => {
+                    const data = doc.data();
+                    const expiration = data.expirationDate ? new Date(data.expirationDate + 'T00:00:00') : null;
+                    return { id: doc.id, ...data, isExpired: expiration ? expiration < now : false };
+                });
+                draw();
+            });
+        };
         
         // --- COLLECTION ---
         const renderCollection = () => {
@@ -795,7 +1447,7 @@
         const checkScroll = () => {
             if (!scroller) return;
             const hasOverflow = scroller.scrollWidth > scroller.clientWidth;
-            leftArrow.style.display = hasOverflow && scroller.scrollLeft > 0 ? 'flex' : 'none';
+            leftArrow.style.display = hasOverflow && scroller.scrollLeft > 1 ? 'flex' : 'none';
             rightArrow.style.display = hasOverflow && scroller.scrollLeft + scroller.clientWidth < scroller.scrollWidth - 1 ? 'flex' : 'none';
         };
         
