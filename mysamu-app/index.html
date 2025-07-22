@@ -386,43 +386,41 @@
         </footer>
     </div>
     
-    <div id="modalContainer" class="modal-overlay">
-        <div id="modalContent" class="modal-content"></div>
-    </div>
+  <div id="modalContent" class="modal-content"></div>
+ </div>
+
+ <script src="/__/firebase/9.23.0/firebase-app.js"></script>
+ <script src="/__/firebase/init.js"></script>
 
 
-    <script type="module">
-        // Firebase v9+ (modular) SDK
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
-        import { getAuth, onAuthStateChanged, signInAnonymously } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
-        import { 
-            getFirestore, doc, onSnapshot, setDoc, getDoc, serverTimestamp, 
-            addDoc, collection, query, orderBy, deleteDoc, runTransaction, where, updateDoc, getDocs
-        } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
-        
-        // --- CONFIGURATION ---
-        const firebaseConfig = {
-            apiKey: "AIzaSyDiRayvEJ27XHrhwgpl0Fl2HkInpkssaHA",
-            authDomain: "mysamu-app.firebaseapp.com",
-            projectId: "mysamu-app",
-            storageBucket: "mysamu-app.appspot.com",
-            messagingSenderId: "577582013908",
-            appId: "1:577582013908:web:ff0ada048944d52131ca41",
-            measurementId: "G-QPKGG0FZC5"
-        };
-        const appId = 'default-app-id'; // Or any identifier for your app instance
+ <script type="module">
+     // Firebase v9+ (modular) SDK
+     // ★★変更2: initializeAppのimportは不要になったので削除★★
+     import { getAuth, onAuthStateChanged, signInAnonymously } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
+     import { 
+         getFirestore, doc, onSnapshot, setDoc, getDoc, serverTimestamp, 
+         addDoc, collection, query, orderBy, deleteDoc, runTransaction, where, updateDoc, getDocs
+     } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+     import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-storage.js";
+     
+     // --- CONFIGURATION ---
+     // ★★変更3: firebaseConfigオブジェクトを完全に削除★★
+     const appId = 'default-app-id';
 
-        // --- FIREBASE INITIALIZATION ---
-        let app, auth, db;
-        try {
-            app = initializeApp(firebaseConfig);
-            auth = getAuth(app);
-            db = getFirestore(app);
-        } catch (e) {
-            console.error("Firebaseの初期化に失敗しました:", e);
-            const loadingView = document.getElementById('view-loading');
-            loadingView.innerHTML = `<p class="error-text">アプリの初期化に失敗しました。Firebaseの設定情報を確認してください。</p>`;
-        }
+     // --- FIREBASE INITIALIZATION ---
+     let app, auth, db, storage;
+     try {
+         // ★★変更4: 自動初期化されたappインスタンスを取得★★
+         app = firebase.app(); 
+         auth = getAuth(app);
+         db = getFirestore(app);
+         storage = getStorage(app);
+     } catch (e) {
+         console.error("Firebaseの初期化に失敗しました:", e);
+         const loadingView = document.getElementById('view-loading');
+         loadingView.innerHTML = `<p class="error-text">アプリの初期化に失敗しました。Firebaseの設定情報を確認してください。</p>`;
+     }
+// (省略)
         
         // --- STATE MANAGEMENT ---
         let userId = null;
